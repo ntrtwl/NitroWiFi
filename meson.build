@@ -7,6 +7,8 @@ project('NitroWiFi', 'c',
     version: '2.1.30003'
 )
 
+fs = import('fs')
+
 buildtype = get_option('buildtype')
 cc = meson.get_compiler('c')
 
@@ -84,9 +86,8 @@ subdir('libraries')
 ############################################################
 nitrowifi_dep = declare_dependency(
     compile_args: nitrowifi_args,
-    dependencies: nitrowifi_prebuilt,
     include_directories: nitrowifi_includes,
-    link_with: nitrowifi_libs
+    link_with: nitrowifi_libs + nitrowifi_prebuilt
 )
 
 meson.override_dependency('NitroWiFi', nitrowifi_dep)
