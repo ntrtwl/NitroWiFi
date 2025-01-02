@@ -1,8 +1,8 @@
-
+
 #include "wcm_private.h"
 #include "wcm_cpsif.h"
 
-
+
 
 
 const u8    WCM_Essid_Any[WCM_ESSID_SIZE] =
@@ -38,10 +38,10 @@ static const char   wcmReportText_InvalidAid[] = { "%s succeeded asyncronously ,
 static const char   wcmReportText_SupportRateset[] = { "Failed association to \"%s\" because of illegal support rate set.\n  So retry with camouflage 5.5M and 11M automatically.\n" };
 #endif
 
-
+
 static WCMWork*     wcmw = NULL;
 
-
+
 static void         WcmConfigure(WCMConfig* config, WCMNotify notify);
 static void         WcmEditScanExParam(void* bssid, void* essid, u32 option);
 static void         WcmInitOption(void);
@@ -70,7 +70,7 @@ static void         WcmWmcbReset(void* arg);
 #define SDK_ASSERT_ON_COMPILE(expr) extern assert_on_compile ## #__LINE__ (char a[(expr) ? 1 : -1])
 #endif
 
-
+
 s32 WCM_Init(void* buf, s32 len)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -138,7 +138,7 @@ s32 WCM_Init(void* buf, s32 len)
     return WCM_RESULT_SUCCESS;
 }
 
-
+
 s32 WCM_Finish(void)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -167,7 +167,7 @@ s32 WCM_Finish(void)
     return WCM_RESULT_SUCCESS;
 }
 
-
+
 s32 WCM_StartupAsync(WCMConfig* config, WCMNotify notify)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -285,7 +285,7 @@ s32 WCM_StartupAsync(WCMConfig* config, WCMNotify notify)
     return WCM_RESULT_ACCEPT;
 }
 
-
+
 s32 WCM_CleanupAsync(void)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -352,7 +352,7 @@ s32 WCM_CleanupAsync(void)
     return WCM_RESULT_ACCEPT;
 }
 
-
+
 s32 WCM_SearchAsync(void* bssid, void* essid, u32 option)
 {
     
@@ -364,7 +364,7 @@ s32 WCM_SearchAsync(void* bssid, void* essid, u32 option)
     return WCM_BeginSearchAsync(bssid, essid, option);
 }
 
-
+
 s32 WCM_BeginSearchAsync(void* bssid, void* essid, u32 option)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -435,7 +435,7 @@ s32 WCM_BeginSearchAsync(void* bssid, void* essid, u32 option)
     return WCM_RESULT_ACCEPT;
 }
 
-
+
 s32 WCM_EndSearchAsync(void)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -477,7 +477,7 @@ s32 WCM_EndSearchAsync(void)
     return WCM_RESULT_ACCEPT;
 }
 
-
+
 s32 WCM_ConnectAsync(void* bssDesc, void* wepDesc, u32 option)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -610,7 +610,7 @@ s32 WCM_ConnectAsync(void* bssDesc, void* wepDesc, u32 option)
     return WCM_RESULT_ACCEPT;
 }
 
-
+
 s32 WCM_DisconnectAsync(void)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -684,7 +684,7 @@ s32 WCM_DisconnectAsync(void)
     return WCM_RESULT_ACCEPT;
 }
 
-
+
 s32 WCM_TerminateAsync(void)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -813,7 +813,7 @@ s32 WCM_TerminateAsync(void)
     return WCM_RESULT_ACCEPT;
 }
 
-
+
 s32 WCM_GetPhase(void)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -829,7 +829,7 @@ s32 WCM_GetPhase(void)
     return phase;
 }
 
-
+
 u32 WCM_UpdateOption(u32 option)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -880,7 +880,7 @@ u32 WCM_UpdateOption(u32 option)
     return old_option;
 }
 
-
+
 void WCM_SetChannelScanTime(u16 msec)
 {
     
@@ -897,13 +897,13 @@ void WCM_SetChannelScanTime(u16 msec)
     }
 }
 
-
+
 WCMWork* WCMi_GetSystemWork(void)
 {
     return wcmw;
 }
 
-
+
 static void WcmConfigure(WCMConfig* config, WCMNotify notify)
 {
     if (config == NULL)
@@ -934,7 +934,7 @@ static void WcmConfigure(WCMConfig* config, WCMNotify notify)
         }
         else
         {
-            
+            
             wcmw->config.pbdbuffer = (void*)WCM_ROUNDUP4((u32) (config->pbdbuffer));
             wcmw->config.nbdbuffer = config->nbdbuffer - (s32) ((4 - ((u32) (config->pbdbuffer) & 0x03)) % 4);
             MI_CpuClear8(wcmw->config.pbdbuffer, (u32) (wcmw->config.nbdbuffer));
@@ -947,7 +947,7 @@ static void WcmConfigure(WCMConfig* config, WCMNotify notify)
     wcmw->notify = notify;
 }
 
-
+
 static void WcmEditScanExParam(void* bssid, void* essid, u32 option)
 {
     (void)WCM_UpdateOption(option);
@@ -990,10 +990,10 @@ static void WcmEditScanExParam(void* bssid, void* essid, u32 option)
     wcmw->scanCount = 0;
 }
 
-
+
 static void WcmInitOption(void)
 {
-    
+    
     wcmw->option = WCM_OPTION_CHANNEL_RDC |
         WCM_OPTION_POWER_SAVE |
         WCM_OPTION_AUTH_OPENSYSTEM |
@@ -1001,7 +1001,7 @@ static void WcmInitOption(void)
         WCM_OPTION_ROUNDSCAN_IGNORE;
 }
 
-
+
 static u16 WcmGetNextScanChannel(u16 channel)
 {
     s32 i;
@@ -1017,7 +1017,7 @@ static u16 WcmGetNextScanChannel(u16 channel)
     return(u16) (((channel + i) % 13) + 1);
 }
 
-
+
 static void WcmNotify(s16 result, void* para0, void* para1, s32 para2)
 {
     s16 notifyId = wcmw->notifyId;
@@ -1026,7 +1026,7 @@ static void WcmNotify(s16 result, void* para0, void* para1, s32 para2)
     WcmNotifyEx(notifyId, result, para0, para1, para2);
 }
 
-
+
 static void WcmNotifyEx(s16 notify, s16 result, void* para0, void* para1, s32 para2)
 {
     if (wcmw->notify)
@@ -1042,7 +1042,7 @@ static void WcmNotifyEx(s16 notify, s16 result, void* para0, void* para1, s32 pa
     }
 }
 
-
+
 static void WcmSetPhase(u32 phase)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -1069,7 +1069,7 @@ static void WcmSetPhase(u32 phase)
     (void)OS_RestoreInterrupts(e);
 }
 
-
+
 void WCMi_ResetKeepAliveAlarm(void)
 {
     OSIntrMode  e = OS_DisableInterrupts();
@@ -1083,7 +1083,7 @@ void WCMi_ResetKeepAliveAlarm(void)
     (void)OS_RestoreInterrupts(e);
 }
 
-
+
 static void WcmKeepAliveAlarm(void* arg)
 {
 #pragma unused(arg)
@@ -1094,7 +1094,7 @@ static void WcmKeepAliveAlarm(void* arg)
 
 #include <nitro/code32.h>
 
-
+
 
 static asm u32
 WcmCountBits( u32 arg )
@@ -1119,7 +1119,7 @@ WcmCountBits( u32 arg )
     b       @loop
 }
 
-
+
 
 static asm u32
 WcmCountLeadingZero( u32 arg )
@@ -1129,7 +1129,7 @@ WcmCountLeadingZero( u32 arg )
 }
 #include <nitro/codereset.h>
 
-
+
 static void WcmWmReset(void)
 {
     WMErrCode   wmResult;
@@ -1151,7 +1151,7 @@ static void WcmWmReset(void)
     }
 }
 
-
+
 static void WcmWmcbIndication(void* arg)
 {
     WMIndCallback*  cb = (WMIndCallback*)arg;
@@ -1161,7 +1161,7 @@ static void WcmWmcbIndication(void* arg)
     {
         if ((cb->state == WM_STATECODE_FIFO_ERROR) && (cb->reason == WM_APIID_AUTO_DISCONNECT))
         {
-            
+            
             switch (wcmw->phase)
             {
             case WCM_PHASE_IDLE_TO_DCF:
@@ -1183,7 +1183,7 @@ static void WcmWmcbIndication(void* arg)
     }
 }
 
-
+
 static void WcmWmcbCommon(void* arg)
 {
     WMCallback*     cb = (WMCallback*)arg;
@@ -1344,7 +1344,7 @@ static void WcmWmcbCommon(void* arg)
     }
 }
 
-
+
 static void WcmWmcbScanEx(void* arg)
 {
     WMStartScanExCallback*  cb = (WMStartScanExCallback*)arg;
@@ -1377,7 +1377,7 @@ static void WcmWmcbScanEx(void* arg)
                 {
                     WCMi_EntryApList(cb->bssDesc[i], cb->linkLevel[i]);
 
-                    
+                    
                     WcmNotifyEx(WCM_NOTIFY_FOUND_AP, WCM_RESULT_SUCCESS, cb->bssDesc[i], (void*)cb, 1818);
                 }
             }
@@ -1465,7 +1465,7 @@ static void WcmWmcbScanEx(void* arg)
     }
 }
 
-
+
 static void WcmWmcbEndScan(void* arg)
 {
     WMCallback*     cb = (WMCallback*)arg;
@@ -1494,7 +1494,7 @@ static void WcmWmcbEndScan(void* arg)
     }
 }
 
-
+
 static void WcmWmcbConnect(void* arg)
 {
     WMStartConnectCallback*     cb = (WMStartConnectCallback*)arg;
@@ -1620,7 +1620,7 @@ static void WcmWmcbConnect(void* arg)
     }
 }
 
-
+
 static void WcmWmcbDisconnect(void* arg)
 {
     WMCallback*     cb = (WMCallback*)arg;
@@ -1663,7 +1663,7 @@ static void WcmWmcbDisconnect(void* arg)
     }
 }
 
-
+
 static void WcmWmcbStartDCF(void* arg)
 {
     WMStartDCFCallback*     cb = (WMStartDCFCallback*)arg;
@@ -1714,7 +1714,7 @@ static void WcmWmcbStartDCF(void* arg)
     }
 }
 
-
+
 static void WcmWmcbEndDCF(void* arg)
 {
     WMCallback*     cb = (WMCallback*)arg;
@@ -1776,7 +1776,7 @@ static void WcmWmcbEndDCF(void* arg)
     }
 }
 
-
+
 static void WcmWmcbReset(void* arg)
 {
     WMCallback*     cb = (WMCallback*)arg;
@@ -1908,4 +1908,4 @@ static void WcmWmcbReset(void* arg)
     }
 }
 
-
+
