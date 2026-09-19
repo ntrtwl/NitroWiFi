@@ -503,7 +503,7 @@ void SOCLi_CleanupSocket(SOCLSocket * socket);
 void SOCLi_TrashSocket(void);
 s32 SOCLi_GetWriteBufferFreeSize(SOCLSocket * socket);
 s32 SOCLi_GetReadBufferOccpiedSize(SOCLSocket * socket);
-int SOCLi_UdpRecvCallback(u8 * data, u32 len, CPSSoc * soc);
+BOOL SOCLi_UdpRecvCallback(u8 * data, u32 len, CPSSoc * soc);
 
 void SOCLi_SocketRegister(SOCLSocket * socket);
 void SOCLi_SocketUnregister(SOCLSocket * socket);

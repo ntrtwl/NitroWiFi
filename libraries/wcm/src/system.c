@@ -1,6 +1,6 @@
 
 #include "wcm_private.h"
-#include "wcm_cpsif.h"
+#include <nitroWiFi/wcm_cpsif.h>
 
 
 
