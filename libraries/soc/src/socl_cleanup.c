@@ -1,6 +1,6 @@
 #include <nitroWiFi/socl.h>
 
-#include "../wcm/include/wcm_cpsif.h"
+#include <nitroWiFi/wcm_cpsif.h>
 
 int SOCL_Cleanup (void)
 {

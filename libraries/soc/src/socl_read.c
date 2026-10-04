@@ -416,7 +416,7 @@ static int SOCLi_ReadUdpBuffer (SOCLSocket * socket, void * buffer, int buffer_l
     return result;
 }
 
-int SOCLi_UdpRecvCallback (u8 * data, u32 len, CPSSoc * soc)
+BOOL SOCLi_UdpRecvCallback (u8 * data, u32 len, CPSSoc * soc)
 {
     SOCLSocket * socket = (SOCLSocket *)soc;
     SOCLiSocketRecvCommandPipe * pipe = socket->recv_pipe;

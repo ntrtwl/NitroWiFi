@@ -1,6 +1,7 @@
 #include <nitroWiFi/socl.h>
 
-#include "../wcm/include/wcm_cpsif.h"
+#include <nitroWiFi/cps.h>
+#include <nitroWiFi/wcm_cpsif.h>
 
 CPSConfig SOCLiCPSConfig;
 const SOCLConfig * SOCLiConfigPtr = NULL;
@@ -108,10 +109,7 @@ static void SOCLi_StartupCPS (void)
     CPS_SetThreadPriority(socl_config->cps_thread_prio ? socl_config->cps_thread_prio : (u32) SOCL_CPS_SOCKET_THREAD_PRIORITY);
     WCM_SetRecvDCFCallback(CPSi_RecvCallbackFunc);
 
-    {
-        extern void CPS_SetScavengerCallback(void (*f)(void));
-        CPS_SetScavengerCallback(SOCLi_TrashSocket);
-    }
+    CPS_SetScavengerCallback(SOCLi_TrashSocket);
 
 #ifdef SDK_MY_DEBUG
     OS_TPrintf("CPS_Startup\n");

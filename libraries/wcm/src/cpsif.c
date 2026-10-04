@@ -1,5 +1,6 @@
+#include <nitroWiFi/wcm_cpsif.h>
+
 #include "wcm_private.h"
-#include "wcm_cpsif.h"
 
 #if WCM_DEBUG
     static const char cpsifWarningText_NotInit[] = { "WCM library is not initialized yet.\n" };
