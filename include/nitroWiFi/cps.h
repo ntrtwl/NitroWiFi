@@ -209,7 +209,7 @@ void CPS_Cleanup(void);
 u32 CPS_GetThreadPriority(void);
 void CPS_SetThreadPriority(u32 new_prio);
 void CPS_SocRegister(CPSSoc *soc);
-void CPS_SocUnRegister(void);
+void CPS_SocUnregister(void);
 void CPS_SocUse(void);
 void CPS_SocRelease(void);
 void CPS_SocDup(OSThread *thread);

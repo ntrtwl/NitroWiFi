@@ -30,7 +30,7 @@ SOCLInAddr SOCL_Resolve (const char * hostname)
 
     CPS_SocRegister(&soc);
     hostip = CPS_Resolve((char *)hostname);
-    CPS_SocUnRegister();
+    CPS_SocUnregister();
 
     SOCLi_Free(buffers);
 

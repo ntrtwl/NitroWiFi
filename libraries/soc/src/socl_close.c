@@ -66,7 +66,7 @@ static int SOCLi_CloseCallBack (void * arg)
         CPS_SocRelease();
     }
 
-    CPS_SocUnRegister();
+    CPS_SocUnregister();
 
     socket->state &= ~(SOCL_STATUS_CONNECTING | SOCL_STATUS_CONNECTED);
 

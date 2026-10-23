@@ -621,8 +621,8 @@ static void put_in_buffer(const u8 *srcAddr, const u8 *dstAddr, const u8 *buf1, 
     }
 
     CPS_USHORT2_HOST(wlan_buf + wlan_putpnt) = blocklen;
-    MI_CpuCopy8(dstAddr, wlan_buf + wlan_putpnt + 2, 6);
-    MI_CpuCopy8(srcAddr, wlan_buf + wlan_putpnt + 8, 6);
+    MI_CpuCopy8(dstAddr, wlan_buf + wlan_putpnt + 2, sizeof(CPSMacAddress));
+    MI_CpuCopy8(srcAddr, wlan_buf + wlan_putpnt + 8, sizeof(CPSMacAddress));
     MI_CpuCopy8(buf1 + 6, wlan_buf + wlan_putpnt + 14, size1 - 6);
     if (buf2 != NULL && size2 != 0) {
         MI_CpuCopy8(buf2, wlan_buf + wlan_putpnt + 8 + size1, size2);
@@ -1729,7 +1729,7 @@ void CPS_SocRegister(CPSSoc *soc)
     CPS_SET_CURSOC(soc);
 }
 
-void CPS_SocUnRegister(void)
+void CPS_SocUnregister(void)
 {
     CPS_SET_CURSOC(NULL);
 }
@@ -2518,7 +2518,7 @@ static void scavenger(void *unused)
         dhcp_release_server();
     }
 
-    CPS_SocUnRegister();
+    CPS_SocUnregister();
 }
 
 static u8 *dhcp_setcommon(u8 *d, int type, u32 *pid)
