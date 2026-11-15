@@ -63,11 +63,11 @@ static int SOCLi_EnableSslCallBack (void * arg)
 
         if (cpacket->connection != NULL) {
             cpsoc->con = cpacket->connection;
-            CPS_SetSsl(1);
+            CPS_SetSsl(TRUE);
             socket->flag_mode = SOCL_FLAGMODE_SSL;
         } else {
             socket->flag_mode = SOCL_FLAGMODE_TCP;
-            CPS_SetSsl(0);
+            CPS_SetSsl(FALSE);
             cpsoc->con = NULL;
         }
     }

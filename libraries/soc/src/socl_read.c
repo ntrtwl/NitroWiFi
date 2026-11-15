@@ -218,7 +218,7 @@ static u8 * SOCLi_ReadCPSBuffer (SOCLSocket * socket, s32 * buffer_len, u16 * lo
         (*remote_ip) = (SOCLInAddr) cpsoc->remote_ip;
         (*buffer_len) = len;
 
-        if (len == 0 && cpsoc->state != CPS_STT_ESTABLISHED) {
+        if (len == 0 && cpsoc->state != CPS_STATE_ESTABLISHED) {
             return NULL;
         }
     } else {
@@ -268,7 +268,7 @@ static int SOCLi_ReadCallBack (void * arg)
             break;
         }
 
-        if (SOCL_SocketIsTCP(socket) && socket->cps_socket.state != CPS_STT_ESTABLISHED) {
+        if (SOCL_SocketIsTCP(socket) && socket->cps_socket.state != CPS_STATE_ESTABLISHED) {
             cpsbuffer = NULL;
             break;
         }
