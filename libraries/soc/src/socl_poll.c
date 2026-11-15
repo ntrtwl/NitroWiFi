@@ -28,7 +28,7 @@ int SOCL_GetStatus (int s)
 
         if (SOCL_SocketIsTCP(socket)) {
 
-            if (SOCL_SocketIsConnected(socket) && socket->cps_socket.state != CPS_STT_ESTABLISHED &&
+            if (SOCL_SocketIsConnected(socket) && socket->cps_socket.state != CPS_STATE_ESTABLISHED &&
                 !(result & SOC_POLLRDNORM)) {
                 socket->state &= ~(SOCL_STATUS_CONNECTING | SOCL_STATUS_CONNECTED);
             }

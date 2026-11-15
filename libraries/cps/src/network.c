@@ -4,6 +4,8 @@
 #include <nitroWiFi/wcm_cpsif.h>
 #include <string.h>
 
+#include "nitroWiFi/ssl.h"
+
 #include <nitro/version_begin.h>
 static char id_string[] = SDK_MIDDLEWARE_STRING("UBIQUITOUS", "CPS");
 #include <nitro/version_end.h>
@@ -20,8 +22,6 @@ static char id_string[] = SDK_MIDDLEWARE_STRING("UBIQUITOUS", "CPS");
 #define MAX_IP_PAYLOAD_SIZE (CPS_MAX_MTU - IP_HEADER_SIZE)
 
 #define IPV4_LLC_SNAP_HEADER ((u8 *)"\xAA\xAA\x03\x00\x00\x00\x08\x00")
-
-#define MTUtoMSS(mtu) (mtu - IP_HEADER_SIZE - TCP_HEADER_SIZE)
 
 #define HARDWARE_TYPE_ETHERNET 1
 
@@ -49,9 +49,7 @@ enum ResolveResult {
     RESOLVE_RESULT_NAME_TOO_LONG = 2,
 };
 
-#define IP_HEADER_SIZE          20
 #define UDP_HEADER_SIZE         8
-#define TCP_HEADER_SIZE         20
 #define ETHERNET_HEADER_SIZE    14
 #define ICMP_HEADER_SIZE        8
 #define ARP_PACKET_SIZE         28
@@ -338,8 +336,8 @@ static void reset_network_vars(int reason)
     while (t != NULL) {
         CPSSoc *soc = OSi_GetSpecificData(t, OSi_SPECIFIC_CPS);
         if (soc != NULL && soc->thread != NULL) {
-            if (soc->state != CPS_STT_DATAGRAM && soc->state != CPS_STT_PING) {
-                soc->state = CPS_STT_CLOSED;
+            if (soc->state != CPS_STATE_DATAGRAM && soc->state != CPS_STATE_PING) {
+                soc->state = CPS_STATE_CLOSED;
             }
             if (soc->block_type != CPS_BLOCK_NONE) {
                 soc->block_type = CPS_BLOCK_NONE;
@@ -923,7 +921,7 @@ static void send_tcp(u8 *data, u32 len, CPSSoc *soc, u8 flag, u16 urg)
     u8 *hdr;
     u32 this_tcp_size;
 
-    if (soc->state == CPS_STT_CLOSED) {
+    if (soc->state == CPS_STATE_CLOSED) {
         return;
     }
 
@@ -1035,7 +1033,7 @@ static void process_icmp_reply(u8 *iphdr, u8 *icmpdata, u32 len)
     while (t != NULL) {
         soc = OSi_GetSpecificData(t, OSi_SPECIFIC_CPS);
         if (soc != NULL && soc->thread != NULL
-            && soc->state == CPS_STT_PING
+            && soc->state == CPS_STATE_PING
             && CPS_USHORT2_HOST(&icmpdata[ICMP_OFFSET_DATA]) == (u16)soc->thread
             && soc->local_port == CPS_USHORT2_HOST(&icmpdata[ICMP_OFFSET_DATA + 2])
             && soc->rcvbufp == 0
@@ -1089,7 +1087,7 @@ static CPSSoc *check_listener(u8 *iphdr, u8 *tcphdr)
     while (t != NULL) {
         soc = OSi_GetSpecificData(t, OSi_SPECIFIC_CPS);
         if (soc != NULL && soc->thread != NULL
-            && soc->state == CPS_STT_LISTEN
+            && soc->state == CPS_STATE_LISTEN
             && soc->local_port == CPS_GETUSHORT2(&tcphdr[TCP_OFFSET_DEST_PORT])
             && (soc->remote_port == 0 || soc->remote_port == CPS_GETUSHORT2(&tcphdr[TCP_OFFSET_SOURCE_PORT]))
             && (soc->remote_ip == 0 || soc->remote_ip == CPS_GETULONG2(&iphdr[IP_OFFSET_SOURCE_ADDRESS]))) {
@@ -1104,7 +1102,7 @@ static CPSSoc *check_listener(u8 *iphdr, u8 *tcphdr)
 
 static BOOL check_socket(u8 *iphdr, u8 *tcphdr, CPSSoc *soc)
 {
-    return soc->state != CPS_STT_DATAGRAM && soc->state != CPS_STT_PING
+    return soc->state != CPS_STATE_DATAGRAM && soc->state != CPS_STATE_PING
         && soc->local_port == CPS_GETUSHORT2(&tcphdr[TCP_OFFSET_DEST_PORT])
         && soc->remote_port == CPS_GETUSHORT2(&tcphdr[TCP_OFFSET_SOURCE_PORT])
         && soc->remote_ip == CPS_GETULONG2(&iphdr[IP_OFFSET_SOURCE_ADDRESS]);
@@ -1202,7 +1200,7 @@ static void tcp_send_rst(u8 *iphdr, u8 *tcphdr, u32 len, u16 urg)
 
 static void dt_syn_listen(u8 *iphdr, u8 *tcphdr, CPSSoc *soc)
 {
-    soc->state = CPS_STT_SYN_RCVD;
+    soc->state = CPS_STATE_SYN_RCVD;
     soc->when = CPSi_GetTick();
     soc->local_ip_real = CPS_GETULONG2(&iphdr[IP_OFFSET_DEST_ADDRESS]);
     soc->remote_port = CPS_GETUSHORT2(&tcphdr[TCP_OFFSET_SOURCE_PORT]);
@@ -1216,9 +1214,9 @@ static BOOL find_specific_socket(u8 *iphdr, u8 *tcphdr, u32 len)
 {
     CPSSoc *soc = find_socket(iphdr, tcphdr);
     if (soc != NULL) {
-        if (soc->state == CPS_STT_LISTEN) {
+        if (soc->state == CPS_STATE_LISTEN) {
             dt_syn_listen(iphdr, tcphdr, soc);
-        } else if (soc->state == CPS_STT_SYN_RCVD || soc->state == CPS_STT_ESTABLISHED) {
+        } else if (soc->state == CPS_STATE_SYN_RCVD || soc->state == CPS_STATE_ESTABLISHED) {
             soc->seqno--;
             dt_syn_listen(iphdr, tcphdr, soc);
         } else {
@@ -1255,7 +1253,7 @@ static void dt_syn(u8 *iphdr, u8 *tcphdr, u32 len)
 static void dt_synack(u8 *iphdr, u8 *tcphdr, u32 len)
 {
     CPSSoc *soc = find_socket(iphdr, tcphdr);
-    if (soc == NULL || soc->state != CPS_STT_SYN_SENT) {
+    if (soc == NULL || soc->state != CPS_STATE_SYN_SENT) {
         tcp_send_rst(iphdr, tcphdr, len, 0);
         return;
     }
@@ -1266,7 +1264,7 @@ static void dt_synack(u8 *iphdr, u8 *tcphdr, u32 len)
     soc->remote_win = CPS_GETUSHORT2(&tcphdr[TCP_OFFSET_WINDOW]);
     parse_mss(tcphdr, soc);
     tcp_send_ack(soc, 0);
-    soc->state = CPS_STT_ESTABLISHED;
+    soc->state = CPS_STATE_ESTABLISHED;
 
     if (soc->block_type == CPS_BLOCK_TCPCON) {
         soc->block_type = CPS_BLOCK_NONE;
@@ -1290,7 +1288,7 @@ static void dt_ack(u8 *iphdr, u8 *tcphdr, u32 len)
     }
 
     u32 remote_seqno = CPS_GETULONG2(&tcphdr[TCP_OFFSET_SEQ_NO]);
-    if (soc->state == CPS_STT_ESTABLISHED && soc->ackno != remote_seqno) {
+    if (soc->state == CPS_STATE_ESTABLISHED && soc->ackno != remote_seqno) {
         tcp_send_ack(soc, 0);
         return;
     }
@@ -1298,12 +1296,12 @@ static void dt_ack(u8 *iphdr, u8 *tcphdr, u32 len)
     soc->remote_win = CPS_GETUSHORT2(&tcphdr[TCP_OFFSET_WINDOW]);
 
     switch (soc->state) {
-    case CPS_STT_CLOSED:
-    case CPS_STT_SYN_SENT:
+    case CPS_STATE_CLOSED:
+    case CPS_STATE_SYN_SENT:
         tcp_send_rst(iphdr, tcphdr, len, 0);
         break;
-    case CPS_STT_SYN_RCVD:
-        soc->state = CPS_STT_ESTABLISHED;
+    case CPS_STATE_SYN_RCVD:
+        soc->state = CPS_STATE_ESTABLISHED;
         if (soc->block_type == CPS_BLOCK_TCPCON) {
             soc->block_type = CPS_BLOCK_NONE;
             OS_WakeupThreadDirect(soc->thread);
@@ -1311,7 +1309,7 @@ static void dt_ack(u8 *iphdr, u8 *tcphdr, u32 len)
         if (len == 0) {
             break;
         }
-    case CPS_STT_ESTABLISHED:
+    case CPS_STATE_ESTABLISHED:
         soc->ackrcvd++;
 
         BOOL bufok;
@@ -1336,7 +1334,7 @@ static void dt_ack(u8 *iphdr, u8 *tcphdr, u32 len)
         }
 
         if (bufok && (flag & TCP_FLAG_FIN)) {
-            soc->state = CPS_STT_LAST_ACK;
+            soc->state = CPS_STATE_LAST_ACK;
             soc->ackno++;
             tcp_send_finack(soc, 0);
 
@@ -1349,12 +1347,12 @@ static void dt_ack(u8 *iphdr, u8 *tcphdr, u32 len)
         }
 
         break;
-    case CPS_STT_FIN_WAIT1:
-    case CPS_STT_FIN_WAIT2:
+    case CPS_STATE_FIN_WAIT1:
+    case CPS_STATE_FIN_WAIT2:
         if (flag & TCP_FLAG_FIN) {
             soc->ackno += len + 1;
             tcp_send_ack(soc, 0);
-            soc->state = CPS_STT_CLOSED;
+            soc->state = CPS_STATE_CLOSED;
 
             if (soc->block_type == CPS_BLOCK_TCPREAD) {
                 soc->block_type = CPS_BLOCK_NONE;
@@ -1366,21 +1364,21 @@ static void dt_ack(u8 *iphdr, u8 *tcphdr, u32 len)
                 tcp_send_ack(soc, 0);
             }
 
-            soc->state = CPS_STT_FIN_WAIT2;
+            soc->state = CPS_STATE_FIN_WAIT2;
         }
 
         break;
-    case CPS_STT_LAST_ACK:
-    case CPS_STT_CLOSING:
-        soc->state = CPS_STT_CLOSED;
+    case CPS_STATE_LAST_ACK:
+    case CPS_STATE_CLOSING:
+        soc->state = CPS_STATE_CLOSED;
         if (soc->block_type == CPS_BLOCK_TCPREAD) {
             soc->block_type = CPS_BLOCK_NONE;
             OS_WakeupThreadDirect(soc->thread);
         }
 
         break;
-    case CPS_STT_LISTEN:
-    case CPS_STT_CLOSE_WAIT:
+    case CPS_STATE_LISTEN:
+    case CPS_STATE_CLOSE_WAIT:
     default:
         if (flag & TCP_FLAG_FIN) {
             soc->ackno++;
@@ -1401,15 +1399,15 @@ static void dt_fin(u8 *iphdr, u8 *tcphdr, u32 len)
     }
 
     switch (soc->state) {
-    case CPS_STT_FIN_WAIT1:
+    case CPS_STATE_FIN_WAIT1:
         soc->ackno++;
         tcp_send_ack(soc, 0);
-        soc->state = CPS_STT_CLOSING;
+        soc->state = CPS_STATE_CLOSING;
         break;
-    case CPS_STT_FIN_WAIT2:
+    case CPS_STATE_FIN_WAIT2:
         soc->ackno++;
         tcp_send_ack(soc, 0);
-        soc->state = CPS_STT_CLOSED;
+        soc->state = CPS_STATE_CLOSED;
 
         if (soc->block_type == CPS_BLOCK_TCPREAD) {
             soc->block_type = CPS_BLOCK_NONE;
@@ -1417,10 +1415,10 @@ static void dt_fin(u8 *iphdr, u8 *tcphdr, u32 len)
         }
 
         break;
-    case CPS_STT_ESTABLISHED:
+    case CPS_STATE_ESTABLISHED:
         soc->ackno++;
         tcp_send_finack(soc, 0);
-        soc->state = CPS_STT_LAST_ACK;
+        soc->state = CPS_STATE_LAST_ACK;
         break;
     default:
         tcp_send_rst(iphdr, tcphdr, len, 0);
@@ -1436,7 +1434,7 @@ static void dt_rst(u8 *iphdr, u8 *tcphdr)
     }
 
     OS_YieldThread();
-    soc->state = CPS_STT_CLOSED;
+    soc->state = CPS_STATE_CLOSED;
 
     if (soc->block_type == CPS_BLOCK_TCPCON || soc->block_type == CPS_BLOCK_TCPREAD) {
         soc->block_type = CPS_BLOCK_NONE;
@@ -1492,7 +1490,7 @@ static void dispatch_udp(u8 *iphdr, u8 *udphdr, u32 len)
     while (t != NULL) {
         soc = OSi_GetSpecificData(t, OSi_SPECIFIC_CPS);
         if (soc != NULL && soc->thread != NULL
-            && soc->state == CPS_STT_DATAGRAM
+            && soc->state == CPS_STATE_DATAGRAM
             && soc->local_port == CPS_GETUSHORT2(&udphdr[UDP_OFFSET_DEST_PORT])
             && (soc->remote_port == 0 || soc->remote_port == CPS_GETUSHORT2(&udphdr[UDP_OFFSET_SOURCE_PORT]))
             && (soc->remote_ip == 0 || soc->remote_ip == CPS_MK_IPv4(255, 255, 255, 255)
@@ -1741,7 +1739,7 @@ void CPS_SocDatagramMode(void)
         return;
     }
 
-    soc->state = CPS_STT_DATAGRAM;
+    soc->state = CPS_STATE_DATAGRAM;
     soc->rcvbufp = 0;
 }
 
@@ -1752,7 +1750,7 @@ void CPS_SocPingMode(void)
         return;
     }
 
-    soc->state = CPS_STT_PING;
+    soc->state = CPS_STATE_PING;
     soc->rcvbufp = 0;
 }
 
@@ -1787,7 +1785,7 @@ void CPS_SocUse(void)
     }
 
     soc->thread = OS_GetCurrentThread();
-    soc->state = CPS_STT_CLOSED;
+    soc->state = CPS_STATE_CLOSED;
     soc->rcvbufp = 0;
     soc->outbufp = 0;
     soc->udpread_callback = NULL;
@@ -1810,7 +1808,7 @@ void CPSi_TcpListenRaw(CPSSoc *soc)
 {
     soc->seqno = get_seqno();
     soc->remote_ackno = soc->seqno;
-    soc->state = CPS_STT_LISTEN;
+    soc->state = CPS_STATE_LISTEN;
 
     OSIntrMode enable = OS_DisableInterrupts();
     soc->block_type = CPS_BLOCK_TCPCON;
@@ -1847,18 +1845,18 @@ u32 CPSi_TcpConnectRaw(CPSSoc *soc)
 
     for (retry = 0; retry < 3; retry++) {
         soc->seqno = seqno;
-        soc->state = CPS_STT_SYN_SENT;
+        soc->state = CPS_STATE_SYN_SENT;
         soc->when = CPSi_GetTick();
         tcp_send_handshake(soc, TCP_FLAG_SYN, 24);
 
         OSIntrMode enabled = OS_DisableInterrupts();
-        if (soc->state == CPS_STT_SYN_SENT && CPSMyIp != 0) {
+        if (soc->state == CPS_STATE_SYN_SENT && CPSMyIp != 0) {
             soc->block_type = CPS_BLOCK_TCPCON;
             OS_SleepThread(NULL);
         }
         OS_RestoreInterrupts(enabled);
 
-        if (soc->state == CPS_STT_ESTABLISHED) {
+        if (soc->state == CPS_STATE_ESTABLISHED) {
             return 0;
         }
 
@@ -1887,7 +1885,7 @@ u32 CPS_TcpConnect(void)
 CPSInAddr CPS_SocWho(u16 *remote_port, CPSInAddr *local_ip)
 {
     CPSSoc *soc = CPS_CURSOC;
-    if (soc != NULL && (soc->state == CPS_STT_ESTABLISHED || soc->state == CPS_STT_DATAGRAM)) {
+    if (soc != NULL && (soc->state == CPS_STATE_ESTABLISHED || soc->state == CPS_STATE_DATAGRAM)) {
         if (remote_port != NULL) {
             *remote_port = soc->remote_port;
         }
@@ -1905,10 +1903,10 @@ void CPSi_TcpShutdownRaw(CPSSoc *soc)
 {
     OS_YieldThread();
 
-    if (soc->state == CPS_STT_SYN_RCVD || soc->state == CPS_STT_ESTABLISHED) {
+    if (soc->state == CPS_STATE_SYN_RCVD || soc->state == CPS_STATE_ESTABLISHED) {
         tcp_send_finack(soc, 25);
-        soc->state = CPS_STT_FIN_WAIT1;
-    } else if (soc->state != CPS_STT_CLOSED) {
+        soc->state = CPS_STATE_FIN_WAIT1;
+    } else if (soc->state != CPS_STATE_CLOSED) {
         tcp_send_ack(soc, 26);
     }
 }
@@ -1939,11 +1937,11 @@ void CPS_TcpClose(void)
     }
 
     u32 start = CPSi_GetTick();
-    while (link_is_on() && soc->state != CPS_STT_CLOSED && (int)(CPSi_GetTick() - start) < CPS_MilliSecondsToLTicks(5000)) {
+    while (link_is_on() && soc->state != CPS_STATE_CLOSED && (int)(CPSi_GetTick() - start) < CPS_MilliSecondsToLTicks(5000)) {
         yield_thread();
     }
 
-    soc->state = CPS_STT_CLOSED;
+    soc->state = CPS_STATE_CLOSED;
 }
 
 static u8 *udp_read_raw(u32 *len, CPSSoc *soc)
@@ -1962,9 +1960,9 @@ static u8 *udp_read_raw(u32 *len, CPSSoc *soc)
 
 u8 *CPSi_TcpReadRaw(u32 *len, CPSSoc *soc)
 {
-    if (soc->rcvbufp == 0 && soc->state == CPS_STT_ESTABLISHED) {
+    if (soc->rcvbufp == 0 && soc->state == CPS_STATE_ESTABLISHED) {
         OSIntrMode enable = OS_DisableInterrupts();
-        while (soc->rcvbufp == 0 && soc->state == CPS_STT_ESTABLISHED) {
+        while (soc->rcvbufp == 0 && soc->state == CPS_STATE_ESTABLISHED) {
             soc->block_type = CPS_BLOCK_TCPREAD;
             OS_SleepThread(NULL);
         }
@@ -1985,7 +1983,7 @@ u8 *CPS_SocRead(u32 *len)
 {
     CPSSoc *soc = CPS_CURSOC;
     if (soc != NULL) {
-        if (soc->state == CPS_STT_DATAGRAM || soc->state == CPS_STT_PING) {
+        if (soc->state == CPS_STATE_DATAGRAM || soc->state == CPS_STATE_PING) {
             return udp_read_raw(len, soc);
         } else if (soc->ssl) {
             return CPSi_SslRead(len, soc);
@@ -2017,7 +2015,7 @@ void CPSi_SocConsumeRaw(u32 len, CPSSoc *soc)
     }
     OS_RestoreInterrupts(enabled);
 
-    if (soc->state != CPS_STT_DATAGRAM && soc->state != CPS_STT_PING && (soc->rcvbufp == 0 || buf_was_full)) {
+    if (soc->state != CPS_STATE_DATAGRAM && soc->state != CPS_STATE_PING && (soc->rcvbufp == 0 || buf_was_full)) {
         tcp_send_ack(soc, 27);
     }
 }
@@ -2059,7 +2057,7 @@ static u32 tcp_write_do(u8 *buf, u32 len, CPSSoc *soc, BOOL need_probe)
 
     u32 ackrcvd_save = soc->ackrcvd;
     u32 limit = ackrcvd_save * 2 + 4;
-    while (len != 0 && soc->state == CPS_STT_ESTABLISHED) {
+    while (len != 0 && soc->state == CPS_STATE_ESTABLISHED) {
         if (soc->remote_mss < remote_win) {
             this_len = soc->remote_mss;
         } else {
@@ -2113,14 +2111,14 @@ u32 CPSi_TcpWrite2Raw(u8 *buf, u32 len, u8 *buf2, u32 len2, CPSSoc *soc)
 
     soc->ackrcvd = 0;
     u32 start_time = CPSi_GetTick();
-    while (link_is_on() && len != 0 && soc->state == CPS_STT_ESTABLISHED
+    while (link_is_on() && len != 0 && soc->state == CPS_STATE_ESTABLISHED
         && (int)(CPSi_GetTick() - start_time) < CPS_MilliSecondsToLTicks(20000)) {
         u32 seqno = soc->seqno;
         tcp_write_do2(buf, len, buf2, len2, soc, need_probe);
         u32 retry_time = CPSi_GetTick();
         do {
             yield_thread();
-        } while (link_is_on() && soc->state == CPS_STT_ESTABLISHED && soc->seqno != soc->remote_ackno
+        } while (link_is_on() && soc->state == CPS_STATE_ESTABLISHED && soc->seqno != soc->remote_ackno
             && (int)(CPSi_GetTick() - retry_time) < CPS_MilliSecondsToLTicks(2000) && (!need_probe || soc->remote_win == 0));
 
         acked_len = soc->remote_ackno - seqno;
@@ -2134,7 +2132,7 @@ u32 CPSi_TcpWrite2Raw(u8 *buf, u32 len, u8 *buf2, u32 len2, CPSSoc *soc)
         }
 
         soc->seqno = soc->remote_ackno;
-        if (soc->state == CPS_STT_ESTABLISHED && soc->remote_win == 0 && acked_len == 0) {
+        if (soc->state == CPS_STATE_ESTABLISHED && soc->remote_win == 0 && acked_len == 0) {
             if (!need_probe) {
                 retry_time = CPSi_GetTick();
                 while (link_is_on() && (int)(CPSi_GetTick() - retry_time) < CPS_MilliSecondsToLTicks(2000)) {
@@ -2173,7 +2171,7 @@ u32 CPSi_SocWrite2(u8 *buf, u32 len, u8 *buf2, u32 len2)
     u32 total_written;
 
     if (soc != NULL) {
-        if (soc->state == CPS_STT_DATAGRAM) {
+        if (soc->state == CPS_STATE_DATAGRAM) {
             if (len != 0) {
                 send_udp(buf, len, soc);
             }
@@ -2181,7 +2179,7 @@ u32 CPSi_SocWrite2(u8 *buf, u32 len, u8 *buf2, u32 len2)
                 send_udp(buf2, len2, soc);
             }
             total_written = len + len2;
-        } else if (soc->state == CPS_STT_PING) {
+        } else if (soc->state == CPS_STATE_PING) {
             if (len != 0) {
                 send_ping(buf, len, soc);
             }
@@ -2236,7 +2234,7 @@ s32 CPS_SocGetLength(void)
         }
 
         s32 count = soc->rcvbufp;
-        if (count != 0 || soc->state == CPS_STT_ESTABLISHED || soc->state == CPS_STT_DATAGRAM || soc->state == CPS_STT_PING) {
+        if (count != 0 || soc->state == CPS_STATE_ESTABLISHED || soc->state == CPS_STATE_DATAGRAM || soc->state == CPS_STATE_PING) {
             return count;
         } else {
             return -1;
@@ -2343,7 +2341,7 @@ s32 CPS_GetProperSize(void)
 {
     CPSSoc *soc = CPS_CURSOC;
     s32 len;
-    if (soc != NULL && soc->state == CPS_STT_ESTABLISHED) {
+    if (soc != NULL && soc->state == CPS_STATE_ESTABLISHED) {
         if (soc->remote_mss < soc->remote_win) {
             len = soc->remote_mss;
         } else {
@@ -2481,17 +2479,17 @@ static void scavenger(void *unused)
         while (t != NULL) {
             CPSSoc *soc = OSi_GetSpecificData(t, OSi_SPECIFIC_CPS);
             if (soc != NULL && soc->thread != NULL) {
-                if (soc->state == CPS_STT_SYN_RCVD && (int)(now - soc->when) > CPS_MilliSecondsToLTicks(5000)) {
-                    soc->state = CPS_STT_LISTEN;
+                if (soc->state == CPS_STATE_SYN_RCVD && (int)(now - soc->when) > CPS_MilliSecondsToLTicks(5000)) {
+                    soc->state = CPS_STATE_LISTEN;
                     soc->remote_port = soc->remote_port_bound;
                     soc->remote_ip = soc->remote_ip_bound;
-                } else if (soc->state == CPS_STT_SYN_SENT && (int)(now - soc->when) > CPS_MilliSecondsToLTicks(5000)) {
+                } else if (soc->state == CPS_STATE_SYN_SENT && (int)(now - soc->when) > CPS_MilliSecondsToLTicks(5000)) {
                     if (soc->block_type == CPS_BLOCK_TCPCON) {
-                        soc->state = CPS_STT_CLOSED;
+                        soc->state = CPS_STATE_CLOSED;
                         soc->block_type = CPS_BLOCK_NONE;
                         OS_WakeupThreadDirect(soc->thread);
                     }
-                } else if (soc->state != CPS_STT_ESTABLISHED) {
+                } else if (soc->state != CPS_STATE_ESTABLISHED) {
                     if (soc->block_type == CPS_BLOCK_TCPREAD) {
                         soc->block_type = CPS_BLOCK_NONE;
                         OS_WakeupThreadDirect(soc->thread);

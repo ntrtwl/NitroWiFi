@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 typedef struct CPSSoc CPSSoc;
+typedef struct CPSSslConnection CPSSslConnection;
 
 typedef u32 CPSInAddr;
 typedef u8 CPSMacAddress[6];
@@ -30,7 +31,7 @@ typedef struct CPSSoc {
     u8 state;
     u8 ssl;
     u16 local_port;
-    void *con;
+    CPSSslConnection *con;
     u32 when;
     u32 local_ip_real;
     u16 remote_port;
@@ -53,18 +54,18 @@ typedef struct CPSSoc {
 } CPSSoc;
 
 enum {
-    CPS_STT_CLOSED = 0,
-    CPS_STT_LISTEN,
-    CPS_STT_SYN_SENT,
-    CPS_STT_SYN_RCVD,
-    CPS_STT_ESTABLISHED,
-    CPS_STT_CLOSE_WAIT,
-    CPS_STT_LAST_ACK,
-    CPS_STT_FIN_WAIT1,
-    CPS_STT_FIN_WAIT2,
-    CPS_STT_CLOSING,
-    CPS_STT_DATAGRAM,
-    CPS_STT_PING
+    CPS_STATE_CLOSED = 0,
+    CPS_STATE_LISTEN,
+    CPS_STATE_SYN_SENT,
+    CPS_STATE_SYN_RCVD,
+    CPS_STATE_ESTABLISHED,
+    CPS_STATE_CLOSE_WAIT,
+    CPS_STATE_LAST_ACK,
+    CPS_STATE_FIN_WAIT1,
+    CPS_STATE_FIN_WAIT2,
+    CPS_STATE_CLOSING,
+    CPS_STATE_DATAGRAM,
+    CPS_STATE_PING
 };
 
 enum {
@@ -92,6 +93,11 @@ typedef struct CPSArpCache {
 #define CPS_MIN_MTU    576
 #define CPS_MAX_MTU    1500
 #define CPS_MAX_IPFRAG (CPS_MAX_IPSIZE / CPS_MIN_MTU + 1)
+
+#define IP_HEADER_SIZE  20
+#define TCP_HEADER_SIZE 20
+
+#define MTUtoMSS(mtu) (mtu - IP_HEADER_SIZE - TCP_HEADER_SIZE)
 
 typedef struct CPSFragTable {
     CPSInAddr ipfrom;
@@ -123,50 +129,60 @@ typedef struct CPSConfig {
 #define CPS_DONOTUSE_DHCP 0x0001
 
 #if defined(BIG_ENDIAN)
-    #define CPS_htons(data) (data)
-    #define CPS_htonl(data) (data)
+#define CPS_htons(data) (data)
+#define CPS_htonl(data) (data)
 #else
-    static inline u16 CPS_htons (u16 data)
-    {
-        return (u16)((data >> 8) | (data << 8));
-    }
+static inline u16 CPS_htons(u16 data)
+{
+    return (data >> 8) | (data << 8);
+}
 
-    static inline u32 CPS_htonl (u32 data)
-    {
-        u32 tmp;
-
-        tmp = ((data >> 8) & 0x00ff00ff) | ((data << 8) & 0xff00ff00);
-        return (tmp >> 16) | (tmp << 16);
-    }
+static inline u32 CPS_htonl(u32 data)
+{
+    u32 tmp = ((data >> 8) & 0x00FF00FF) | ((data << 8) & 0xFF00FF00);
+    return (tmp >> 16) | (tmp << 16);
+}
 #endif
 
 #define CPS_USHORT2_HOST(p) (*(u16 *)(p))
 
 #define CPS_GETUSHORT1(p) ((u16)(((u8 *)(p))[0] << 8 | ((u8 *)(p))[1]))
-#define CPS_GETULONG1(p) (((u32)CPS_GETUSHORT1(p) << 16) | CPS_GETUSHORT1((p) + 2))
+#define CPS_GETULONG1(p)  (((u32)CPS_GETUSHORT1(p) << 16) | CPS_GETUSHORT1((p) + 2))
 
 #define CPS_GETUSHORT2(p) (CPS_htons(CPS_USHORT2_HOST(p)))
-#define CPS_GETULONG2(p) (((u32)CPS_GETUSHORT2(p) << 16) | CPS_GETUSHORT2((p) + 2))
+#define CPS_GETULONG2(p)  (((u32)CPS_GETUSHORT2(p) << 16) | CPS_GETUSHORT2((p) + 2))
 
-#define CPS_SETUSHORT1(p, v) do {((u8 *)(p))[0] = (u8)((v) >> 8); ((u8 *)(p))[1] = (u8)(v);} while (0)
-#define CPS_SETULONG1(p, v) do {CPS_SETUSHORT1(p, (u16)((v) >> 16)); CPS_SETUSHORT1((p) + 2, (u16)(v));} while (0)
+#define CPS_SETUSHORT1(p, v)             \
+    do {                                 \
+        ((u8 *)(p))[0] = (u8)((v) >> 8); \
+        ((u8 *)(p))[1] = (u8)(v);        \
+    } while (0)
+#define CPS_SETULONG1(p, v)                  \
+    do {                                     \
+        CPS_SETUSHORT1(p, (u16)((v) >> 16)); \
+        CPS_SETUSHORT1((p) + 2, (u16)(v));   \
+    } while (0)
 
 #define CPS_SETUSHORT2(p, v) CPS_USHORT2_HOST(p) = CPS_htons((u16)(v))
-#define CPS_SETULONG2(p, v) do {CPS_SETUSHORT2(p, (u32)(v) >> 16); CPS_SETUSHORT2((p) + 2, v);} while (0)
+#define CPS_SETULONG2(p, v)                \
+    do {                                   \
+        CPS_SETUSHORT2(p, (u32)(v) >> 16); \
+        CPS_SETUSHORT2((p) + 2, v);        \
+    } while (0)
 
 #define CPS_MilliSecondsToLTicks(msec) (((OS_SYSTEM_CLOCK / 64 / 1000) * (msec)) >> 16)
 
 #ifndef SDK_THREAD_INFINITY
-    #define CPS_CURSOC (CPSSocTab[OS_GetCurrentThread()->id])
-    #define CPS_SET_CURSOC(p) CPS_CURSOC = p
+#define CPS_CURSOC        (CPSSocTab[OS_GetCurrentThread()->id])
+#define CPS_SET_CURSOC(p) CPS_CURSOC = p
 #else
-    #define CPS_CURSOC ((CPSSoc *)OSi_GetSpecificData(OS_GetCurrentThread(), OSi_SPECIFIC_CPS))
-    #define CPS_SET_CURSOC(p) OSi_SetSpecificData(OS_GetCurrentThread(), OSi_SPECIFIC_CPS, (void *)(p))
+#define CPS_CURSOC        ((CPSSoc *)OSi_GetSpecificData(OS_GetCurrentThread(), OSi_SPECIFIC_CPS))
+#define CPS_SET_CURSOC(p) OSi_SetSpecificData(OS_GetCurrentThread(), OSi_SPECIFIC_CPS, (void *)(p))
 #endif
 
-static inline u32 CPSi_GetTick ()
+static inline u32 CPSi_GetTick(void)
 {
-    return (u32)(OS_GetTick() >> 16);
+    return OS_GetTick() >> 16;
 }
 
 extern CPSAllocFunc CPSiAlloc;
@@ -183,19 +199,8 @@ extern int CPSNoIpReason;
 extern MATHRandContext32 CPSiRand32ctx;
 
 #ifndef SDK_THREAD_INFINITY
-    extern CPSSoc *CPSSocTab[];
+extern CPSSoc *CPSSocTab[];
 #endif
-
-extern void CPSi_SslListen(CPSSoc *soc);
-extern u32 CPSi_SslConnect(CPSSoc *soc);
-extern u8 *CPSi_SslRead(u32 *, CPSSoc *);
-extern void CPSi_SslConsume(u32, CPSSoc *);
-extern s32 CPSi_SslGetLength(CPSSoc *);
-extern u32 CPSi_SslWrite2(u8 *, u32, u8 *, u32, CPSSoc *);
-extern void CPSi_SslShutdown(CPSSoc *);
-extern void CPSi_SslClose(CPSSoc *);
-extern void CPSi_SslPeriodical(u32 now);
-extern void CPSi_SslCleanup(void);
 
 void CPSi_SocConsumeRaw(u32 len, CPSSoc *soc);
 u32 CPSi_TcpWrite2Raw(u8 *buf, u32 len, u8 *buf2, u32 len2, CPSSoc *soc);
@@ -241,10 +246,6 @@ void CPS_SocPrintf(const char *format_str, ...);
 void CPS_SocFlush(void);
 s32 CPS_GetProperSize(void);
 
-extern void CPS_SetSsl(int);
-extern u32 CPS_GetSslHandshakePriority(void);
-extern void CPS_SetSslHandshakePriority(u32);
-
 #define CPS_SetSslLowThreadPriority CPS_SetSslHandshakePriority
 #define CPS_GetSslLowThreadPriority CPS_GetSslHandshakePriority
 
@@ -256,7 +257,7 @@ void CPS_EncodeNbName(u8 *d, u8 *s);
 void CPSi_RecvCallbackFunc(const u8 *srcAddr, const u8 *dstAddr, const u8 *buf, s32 size);
 
 #define CPS_MK_IPv4(a, b, c, d) (((u32)(a) << 24) + ((u32)(b) << 16) + ((u32)(c) << 8) + (u32)(d))
-#define CPS_CV_IPv4(ip) (u8)((ip) >> 24), (u8)((ip) >> 16), (u8)((ip) >> 8), (u8)(ip)
+#define CPS_CV_IPv4(ip)         (u8)((ip) >> 24), (u8)((ip) >> 16), (u8)((ip) >> 8), (u8)(ip)
 
 #ifdef __cplusplus
 }
